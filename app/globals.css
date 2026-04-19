@@ -1,0 +1,89 @@
+@import "tailwindcss";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #ffffff;
+  color: #000000;
+}
+
+body {
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+/* Yue Sport mind map — animated card groups only; wires are inert */
+.mindmap-svg-root .mindmap-node {
+  cursor: pointer;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.mindmap-svg-root .mindmap-node-card {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* Static connectors: unified gray (fill-based art + any future <line>) */
+.mindmap-svg-root .mindmap-wires path {
+  pointer-events: none;
+  fill: #b0bec5;
+  stroke: none;
+}
+
+.mindmap-svg-root .mindmap-wires line {
+  pointer-events: none;
+  fill: none;
+  stroke: #b0bec5;
+}
+
+/* AIGC myths — vertical marquee (duplicate track; -50% = seamless loop) */
+@keyframes aigc-marquee-y {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-50%);
+  }
+}
+
+.aigc-marquee-y {
+  animation: aigc-marquee-y 26s linear infinite;
+  will-change: transform;
+}
+
+/* AIGC myths — horizontal marquee (duplicate track; -50% = seamless loop) */
+@keyframes aigc-marquee-x {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* Myth stills row — pause while hovering a single slide */
+.myth-marquee-track {
+  animation: aigc-marquee-x 42s linear infinite;
+  will-change: transform;
+}
+
+.myth-marquee-track:has(.myth-marquee-slide:hover) {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aigc-marquee-y {
+    animation: none;
+  }
+
+  .myth-marquee-track {
+    animation: none;
+  }
+}
