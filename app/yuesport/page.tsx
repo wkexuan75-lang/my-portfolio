@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
 
-import { MySportAppDemo } from "@/app/app/mysport/prototypes/MySportAppDemo";
+import { ImaHeatmapPhonePreview } from "@/components/yuesport/ImaHeatmapPhonePreview";
 import { MindMapSection } from "@/components/MindMapSection";
 import { PhoneFrame } from "@/components/PhoneFrame";
 import { TypewriterNarrative } from "@/components/yuesport/TypewriterNarrative";
@@ -377,7 +377,7 @@ export default function YueSportPage() {
                 </div>
 
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                  <MySportAppDemo
+                  <ImaHeatmapPhonePreview
                     className="isolate mx-0 flex h-full min-h-0 w-full max-w-none flex-col rounded-none border-0 shadow-none ring-0"
                     shellClassName="!min-h-0 h-full min-h-0 flex-1"
                   />
