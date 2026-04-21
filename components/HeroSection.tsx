@@ -3,7 +3,7 @@
 import { motion, useMotionValue, useSpring } from "framer-motion";
 import { useCallback, useEffect, useRef } from "react";
 
-import { HeroIntroReveal } from "@/components/HeroIntroReveal";
+import { BubbleCircle } from "@/components/BubbleCircle";
 
 type Ripple = { x: number; y: number; birth: number };
 
@@ -13,6 +13,35 @@ const RIPPLE_INTERVAL_MS = 110;
 
 const NAME = "KEXUAN WANG";
 const NAME_CHARS = NAME.split("");
+
+const HERO_BIO_ZH =
+  "这就是我！一个喜欢旅行/羽毛球的创意媒体制作者；我希望我能够原创出更多与体育结合的有趣的设计与内容，并运用我所学的传播技能与知识，让有趣传递！";
+
+const HERO_BIO_EN =
+  "Creative Maker | Traveler | Badminton Enthusiast. My goal is to bridge the gap between sports and design with a playful twist. Armed with communication expertise, I'm on a journey to make sure every original idea carries a spark of joy.";
+
+/** Scroll-in only for the bio block (below BubbleCircle); stagger CN → EN. */
+const bioScrollParent = {
+  hidden: {},
+  visible: {
+    transition: { staggerChildren: 0.14, delayChildren: 0.06 },
+  },
+} as const;
+
+const bioScrollChild = {
+  hidden: { opacity: 0, y: 48, scale: 0.9 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: {
+      type: "spring" as const,
+      stiffness: 400,
+      damping: 22,
+      mass: 0.82,
+    },
+  },
+} as const;
 
 const nameMid = (NAME_CHARS.length - 1) / 2;
 
@@ -36,7 +65,7 @@ function nameLetterVariants(i: number) {
 }
 
 export default function HeroSection() {
-  const sectionRef = useRef<HTMLElement>(null);
+  const sectionRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const ripplesRef = useRef<Ripple[]>([]);
   const rafRef = useRef<number>(0);
@@ -169,68 +198,92 @@ export default function HeroSection() {
   return (
     <section
       id="home-hero"
-      ref={sectionRef}
-      className="relative flex min-h-[100dvh] w-full items-center justify-center overflow-x-hidden bg-[#FFFFFF]"
-      onMouseMove={(e) => handlePointerMove(e.clientX, e.clientY)}
-      onMouseLeave={() => {
-        magneticX.set(0);
-        magneticY.set(0);
-        const section = sectionRef.current;
-        if (section) {
-          const { width, height } = section.getBoundingClientRect();
-          targetMouseRef.current = { x: width / 2, y: height / 2 };
-        }
-      }}
+      className="flex w-full flex-col overflow-x-hidden bg-[#FFFFFF]"
     >
-      <canvas
-        ref={canvasRef}
-        className="pointer-events-none absolute inset-0 z-0"
-        aria-hidden
-      />
-
-      <motion.div
-        className="relative z-10 flex flex-col items-center justify-center px-6 text-center"
-        style={{ x: smoothMagX, y: smoothMagY }}
+      {/* Exactly one viewport: only name + canvas; bubble sits below the fold */}
+      <div
+        ref={sectionRef}
+        className="relative flex h-[100svh] w-full shrink-0 flex-col items-center justify-center overflow-x-hidden px-3 sm:px-6"
+        onMouseMove={(e) => handlePointerMove(e.clientX, e.clientY)}
+        onMouseLeave={() => {
+          magneticX.set(0);
+          magneticY.set(0);
+          const section = sectionRef.current;
+          if (section) {
+            const { width, height } = section.getBoundingClientRect();
+            targetMouseRef.current = { x: width / 2, y: height / 2 };
+          }
+        }}
       >
+        <canvas
+          ref={canvasRef}
+          className="pointer-events-none absolute inset-0 z-0"
+          aria-hidden
+        />
+
         <motion.div
-          initial={{ opacity: 0, y: 20, filter: "blur(10px)" }}
-          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-          transition={{ duration: 1.2, ease: premiumEase }}
+          className="relative z-20 flex w-full max-w-full flex-col items-center justify-center px-1 text-center"
+          style={{ x: smoothMagX, y: smoothMagY }}
         >
-          <motion.h1
-            className="flex max-w-[min(92vw,44rem)] cursor-default flex-wrap items-center justify-center gap-0 text-[clamp(2.35rem,7.2vw,4.85rem)] font-light leading-[1.06] tracking-[0.14em] text-black [font-family:var(--font-cormorant),serif]"
-            initial="rest"
-            whileHover="hover"
-            animate="rest"
-            variants={nameContainerVariants}
+          <motion.div
+            className="py-4 sm:py-6"
+            initial={{ opacity: 0, y: 20, filter: "blur(10px)" }}
+            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+            transition={{ duration: 1.2, ease: premiumEase }}
           >
-            {NAME_CHARS.map((ch, i) => (
-              <motion.span
-                key={`${ch}-${i}`}
-                variants={nameLetterVariants(i)}
-                className="inline-block"
-              >
-                {ch === " " ? "\u00A0" : ch}
-              </motion.span>
-            ))}
-          </motion.h1>
+            <motion.h1
+              className="flex max-w-full cursor-default flex-nowrap items-center justify-center gap-0 whitespace-nowrap font-light leading-none tracking-[0.14em] text-black [font-family:var(--font-cormorant),serif] text-[clamp(0.95rem,calc((100vw-1.75rem)/10.8),5.25rem)]"
+              initial="rest"
+              whileHover="hover"
+              animate="rest"
+              variants={nameContainerVariants}
+            >
+              {NAME_CHARS.map((ch, i) => (
+                <motion.span
+                  key={`${ch}-${i}`}
+                  variants={nameLetterVariants(i)}
+                  className="inline-block"
+                >
+                  {ch === " " ? "\u00A0" : ch}
+                </motion.span>
+              ))}
+            </motion.h1>
+          </motion.div>
         </motion.div>
+      </div>
 
-        <motion.p
-          className="mt-6 max-w-xl text-[10px] font-thin uppercase leading-relaxed tracking-[0.2em] text-black/50 sm:text-[11px] [font-family:var(--font-inter-hero),system-ui,sans-serif]"
-          initial={{ opacity: 0, y: 20, filter: "blur(10px)" }}
-          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-          transition={{
-            duration: 1.2,
-            delay: 0.14,
-            ease: premiumEase,
-          }}
-        >
-          Information Design &amp; Data Visualization
-        </motion.p>
-      </motion.div>
-
-      <HeroIntroReveal />
+      <div className="relative z-20 flex w-full shrink-0 flex-col items-center px-4 pb-10 pt-8 sm:pt-10 md:pt-12">
+        <BubbleCircle />
+        <div className="mt-14 flex w-full justify-center sm:mt-16 md:mt-[4.25rem]">
+          <motion.div
+            className="w-full max-w-[min(92vw,720px)] space-y-3 text-center [font-family:var(--font-geist-sans),system-ui,sans-serif]"
+            aria-label="About"
+            initial="hidden"
+            whileInView="visible"
+            variants={bioScrollParent}
+            viewport={{
+              once: true,
+              amount: 0.55,
+              margin: "0px 0px -12% 0px",
+            }}
+          >
+            <motion.p
+              variants={bioScrollChild}
+              lang="zh-Hans"
+              className="text-[13px] leading-relaxed text-neutral-800 sm:text-[15px]"
+            >
+              {HERO_BIO_ZH}
+            </motion.p>
+            <motion.p
+              variants={bioScrollChild}
+              lang="en"
+              className="text-[12px] leading-relaxed text-neutral-600 sm:text-[14px]"
+            >
+              {HERO_BIO_EN}
+            </motion.p>
+          </motion.div>
+        </div>
+      </div>
     </section>
   );
 }

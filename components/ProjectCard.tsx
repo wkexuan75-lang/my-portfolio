@@ -8,7 +8,12 @@ import {
 } from "framer-motion";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { useLayoutEffect, useRef, useState } from "react";
+import {
+  useLayoutEffect,
+  useRef,
+  useState,
+  type RefCallback,
+} from "react";
 
 export type ProjectCardData = {
   id: string;
@@ -30,9 +35,12 @@ const CARD_SHADOW_HOVER =
 export function ProjectCard({
   item,
   scrollYProgress,
+  dotRef,
 }: {
   item: ProjectCardData;
   scrollYProgress: MotionValue<number>;
+  /** Shuttle path: dot center in SVG space (parent measures via getBoundingClientRect). */
+  dotRef?: RefCallback<HTMLSpanElement | null>;
 }) {
   const t = useTransform(scrollYProgress, (v) => {
     const start = Math.max(0, item.depth - 0.12);
@@ -106,6 +114,7 @@ export function ProjectCard({
       >
         {/* Dot toward center path: left column → right of card; right column → left of card; margin = (edge→centerline gap) / 5 */}
         <span
+          ref={dotRef}
           data-shuttle-path-anchor=""
           data-depth={String(item.depth)}
           className={
@@ -130,7 +139,7 @@ export function ProjectCard({
           <h3 className="text-xl font-medium tracking-tight text-black">
             {item.title}
           </h3>
-          <p className="text-sm leading-relaxed text-black/75 sm:text-[15px]">
+          <p className="whitespace-pre-line text-sm leading-relaxed text-black/75 sm:text-[15px]">
             {item.description}
           </p>
           <div className="pt-2">

@@ -19,7 +19,7 @@ export function HeroIntroReveal() {
 
   return (
     <motion.div
-      className="pointer-events-none absolute inset-x-0 bottom-0 z-[15] flex justify-center px-4 pb-10 pt-6 sm:px-6 sm:pb-14"
+      className="pointer-events-none flex w-full justify-center px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 sm:px-6 sm:pb-10 sm:pt-6"
       initial={false}
       animate={{
         opacity: visible ? 1 : 0,
@@ -29,9 +29,9 @@ export function HeroIntroReveal() {
       transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
       aria-hidden={!visible}
     >
-      <div className="mx-auto flex w-full max-w-[min(94vw,64rem)] flex-col items-center gap-6 sm:flex-row sm:items-center sm:gap-8 md:gap-10">
+      <div className="mx-auto flex w-full max-w-[min(94vw,64rem)] flex-col items-stretch gap-4 sm:flex-row sm:items-center sm:gap-6 md:gap-8">
         <motion.div
-          className="flex shrink-0 justify-center sm:justify-start"
+          className="flex shrink-0 justify-center sm:max-w-[42%] sm:justify-start"
           initial={false}
           animate={
             visible
@@ -48,14 +48,14 @@ export function HeroIntroReveal() {
           <Image
             src="/images/icon.png"
             alt="Kexuan Wang"
-            width={400}
-            height={400}
-            className="h-72 w-72 object-contain sm:h-[22rem] sm:w-[22rem] md:h-96 md:w-96"
-            sizes="(max-width: 640px) 288px, (max-width: 768px) 352px, 384px"
+            width={800}
+            height={800}
+            className="mx-auto h-auto w-auto max-h-[min(26svh,200px)] max-w-[min(72vw,200px)] object-contain sm:mx-0 sm:max-h-[min(30svh,260px)] sm:max-w-[min(40vw,280px)] md:max-h-[min(32svh,300px)] md:max-w-[min(34vw,320px)]"
+            sizes="(max-width: 640px) 200px, (max-width: 1024px) 280px, 320px"
             priority={false}
           />
         </motion.div>
-        <div className="flex min-w-0 flex-1 flex-col gap-3 text-left sm:gap-3.5">
+        <div className="flex min-w-0 flex-1 flex-col gap-2.5 text-left sm:gap-3 sm:pl-1">
           <p
             lang="zh-Hans"
             className="text-sm leading-relaxed text-neutral-700 sm:text-[15px] sm:leading-relaxed"

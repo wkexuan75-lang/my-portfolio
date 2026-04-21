@@ -6,25 +6,43 @@ import {
   useMotionValueEvent,
   useScroll,
   useMotionValue,
+  useTransform,
 } from "framer-motion";
 import {
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
 
 import { ProjectCard, type ProjectCardData } from "./ProjectCard";
 
-const VIEW_W = 100;
-const VIEW_H = 5000;
 const NOSE_ROTATE_OFFSET_DEG = 90;
+
+/** Initial SVG user space until first layout measure. */
+const INITIAL_VB: { w: number; h: number } = { w: 100, h: 4000 };
+
+/**
+ * Dashed trail: pure black, thick stroke. `pathLength` on the same element overrides
+ * `strokeDasharray` in Framer Motion — reveal uses a mask path with `pathLength` instead.
+ */
+const SHUTTLE_TRAIL_STROKE = "#000000";
+const SHUTTLE_TRAIL_STROKE_WIDTH_PX = 5;
+const SHUTTLE_TRAIL_DASH = "15 10";
+/** Mask stroke must cover the dashed line width along curves (screen px). */
+const SHUTTLE_TRAIL_MASK_STROKE_PX = 14;
 
 type VbPt = { x: number; y: number };
 
-/** Fallback before DOM-measured anchors exist */
-const FALLBACK_PATH_D = `M 50 500 C 35 1350, 65 2150, 50 2500 C 35 3350, 65 4150, 50 5000`;
+function fallbackPathD(vbW: number, vbH: number): string {
+  const mx = vbW * 0.5;
+  const y0 = Math.min(120, vbH * 0.04);
+  const y1 = vbH * 0.97;
+  return `M ${mx} ${y0} L ${mx} ${y1}`;
+}
 
 /** Smooth curve through knots (Catmull–Rom → cubic Bézier), passes through all points */
 function catmullRomToSvgPath(points: VbPt[]): string {
@@ -45,131 +63,163 @@ function catmullRomToSvgPath(points: VbPt[]): string {
   return d;
 }
 
-function measurePathFromCardAnchors(
-  container: HTMLElement,
-  svg: SVGSVGElement,
-): { pathD: string; nodePts: VbPt[] } | null {
-  const els = Array.from(
-    container.querySelectorAll<HTMLElement>("[data-shuttle-path-anchor]"),
+/** Scroll position (0–1) for each card center; linear spacing so vertical gaps match. */
+const CARD_DEPTH_TOP = 0.11;
+const CARD_DEPTH_BOTTOM = 0.92;
+
+function cardDepthAtIndex(index: number, total: number): number {
+  if (total <= 1) return CARD_DEPTH_TOP;
+  return (
+    CARD_DEPTH_TOP +
+    (index / (total - 1)) * (CARD_DEPTH_BOTTOM - CARD_DEPTH_TOP)
   );
-  if (els.length === 0) return null;
-
-  const sorted = els
-    .map((el) => ({
-      el,
-      depth: Number(el.dataset.depth),
-    }))
-    .filter((x) => Number.isFinite(x.depth))
-    .sort((a, b) => a.depth - b.depth);
-
-  const svgRect = svg.getBoundingClientRect();
-  if (svgRect.width < 8 || svgRect.height < 8) return null;
-
-  const toVB = (cx: number, cy: number): VbPt => ({
-    x: ((cx - svgRect.left) / svgRect.width) * VIEW_W,
-    y: ((cy - svgRect.top) / svgRect.height) * VIEW_H,
-  });
-
-  const anchorPts: VbPt[] = sorted.map(({ el }) => {
-    const r = el.getBoundingClientRect();
-    return toVB(r.left + r.width / 2, r.top + r.height / 2);
-  });
-
-  anchorPts.sort((a, b) => a.y - b.y);
-
-  const points: VbPt[] = [
-    { x: 50, y: 500 },
-    ...anchorPts,
-    { x: 50, y: VIEW_H },
-  ];
-
-  return {
-    pathD: catmullRomToSvgPath(points),
-    nodePts: anchorPts,
-  };
 }
 
-const PROJECTS: ProjectCardData[] = [
+const PROJECTS_BASE: Omit<ProjectCardData, "depth">[] = [
   {
     id: "yue-sport",
     index: "01",
-    title: "Yue Sport",
-    category: "Interactive Program",
-    depth: 0.15,
-    description:
-      "UW Husky Edition — verified NetID community, low-friction matching, and live IMA energy for campus sports.",
+    title: "Yue Sports",
+    category: "PRODUCT / UX",
+    description: `Mission: Campus sports connectivity through algorithmic matching
+Content: Verified NetID community & low-friction matching for campus sports
+Skills: Product Management / UX Design
+Tools: Figma / Cursor`,
     side: "left",
     href: "/yuesport",
   },
   {
-    id: "day-night",
+    id: "loewe-marketing",
     index: "02",
-    title: "Day & Night",
-    category: "Website Dev",
-    depth: 0.3,
-    description:
-      "A crafted web experience balancing clarity and atmosphere—structured storytelling with responsive, refined UI.",
+    title: "The Scented Realm",
+    category: "BRAND / MARKETING",
+    description: `Mission: Strategic art-direction and bilingual narrative for luxury home fragrance
+Content: LOEWE Home Fragrance — SWOT & market analysis
+Skills: Brand Strategy / Digital Marketing / Data Analysis
+Tools: Adobe Creative Suite / Canva`,
     side: "right",
+    href: "/marketing/loewe",
+  },
+  {
+    id: "day-night",
+    index: "03",
+    title: "Day & Night",
+    category: "ART / PHOTOGRAPHY",
+    description: `Mission: Capturing the fragments of life and the rhythm of Seattle
+Content: A visual journal of light, shadow, and urban moments
+Skills: Art Direction / Photography
+Tools: Lightroom / Canon System`,
+    side: "left",
     href: "/daynight",
   },
   {
     id: "heritage",
-    index: "03",
-    title: "Heritage",
-    category: "Song Dynasty Ceramics",
-    depth: 0.45,
-    description:
-      "Echoes of Song — digital heritage of the Five Great Wares (Ru, Guan, Ding, Ge, Jun) for a global audience.",
-    side: "left",
+    index: "04",
+    title: "Echoes of Song",
+    category: "WEB SITE DESIGN",
+    description: `Mission: Global promotion of Intangible Cultural Heritage
+Content: Digital heritage of the Five Great Wares (Ru, Guan, Ding, Ge, Jun)
+Skills: Web Design / Interactive Storytelling
+Tools: Figma / Axure RP / Dreamweaver`,
+    side: "right",
     href: "/ceramics",
   },
   {
     id: "medicinal-journey",
-    index: "04",
-    title: "Medicinal Journey",
-    category: "Game Dev",
-    depth: 0.6,
-    description:
-      "A TCM educational puzzle game with interactive diagnostics—learn patterns through play.",
-    side: "right",
+    index: "05",
+    title: "Healing Odyssey",
+    category: "GAME DESIGN",
+    description: `Mission: De-mystifying Traditional Chinese Medicine through gamified interaction
+Content: An interactive TCM knowledge puzzle game for cultural education
+Skills: Game Design / Interactive Storytelling
+Tools: Animate / After Effects`,
+    side: "left",
     href: "/game",
   },
   {
     id: "paw-go",
-    index: "05",
-    title: "Paw&GO",
-    category: "Graphic / Brand Design",
-    depth: 0.75,
-    description:
-      "Pet-friendly food truck identity—health, freedom, and bold visual language for the street.",
-    side: "left",
+    index: "06",
+    title: "PAW&GO",
+    category: "VISUAL / BRANDING",
+    description: `Mission: Innovative visual identity for a pet-friendly lifestyle brand
+Content: Sustainable packaging & social-first branding for modern pet owners
+Skills: Visual Design / Branding Design
+Tools: Illustrator / Midjourney`,
+    side: "right",
     href: "/brand",
   },
   {
     id: "aigc-video",
-    index: "06",
-    title: "Mythos AI",
-    category: "AIGC Video Production",
-    depth: 0.9,
-    description:
-      "Generative video workflows exploring Chinese mythology and ritual through cinematic AIGC.",
-    side: "right",
-    href: "/aigc",
-  },
-  {
-    id: "loewe-marketing",
     index: "07",
-    title: "Marketing Strategy – LOEWE",
-    category: "Brand Strategy",
-    depth: 0.96,
-    description:
-      "LOEWE home fragrance — SWOT, bilingual narrative, and art-direction for The Scented Realm.",
+    title: "AIGC Video Production",
+    category: "GENERATIVE VIDEO",
+    description: `Mission: Exploring the frontiers of AI-driven cinematic storytelling
+Content: Generative video experiments and AI-assisted post-production workflows
+Skills: Video Production / Prompt Engineering
+Tools: Runway / Pika / Luma / Premiere Pro / Midjourney / Pixverse`,
     side: "left",
-    href: "/marketing/loewe",
+    href: "/aigc",
   },
 ];
 
+const PROJECTS: ProjectCardData[] = PROJECTS_BASE.map((row, i) => ({
+  ...row,
+  depth: cardDepthAtIndex(i, PROJECTS_BASE.length),
+}));
+
 const CARD_DEPTHS = PROJECTS.map((p) => p.depth);
+
+/** Scroll fraction where shuttle + dashed trail reach 100% (card 07 / last dot). */
+const SHUTTLE_SCROLL_END = PROJECTS[PROJECTS.length - 1]!.depth;
+
+/**
+ * Build path in SVG **pixel user space** (viewBox matches svg.getBoundingClientRect size,
+ * preserveAspectRatio="none") so resize keeps the stroke aligned with each card dot ref.
+ * Path ends at the last project dot (card 07); no tail past it.
+ */
+function computePathFromDotRefs(
+  svg: SVGSVGElement,
+  dotElements: (HTMLSpanElement | null)[],
+): { pathD: string; nodePts: VbPt[]; vbW: number; vbH: number } | null {
+  const svgRect = svg.getBoundingClientRect();
+  const vbW = svgRect.width;
+  const vbH = svgRect.height;
+  if (vbW < 8 || vbH < 8) return null;
+
+  const toLocal = (el: HTMLElement): VbPt => {
+    const r = el.getBoundingClientRect();
+    return {
+      x: r.left + r.width / 2 - svgRect.left,
+      y: r.top + r.height / 2 - svgRect.top,
+    };
+  };
+
+  const pairs: { depth: number; pt: VbPt }[] = [];
+  for (let i = 0; i < dotElements.length; i++) {
+    const el = dotElements[i];
+    if (!el) continue;
+    pairs.push({ depth: PROJECTS[i]!.depth, pt: toLocal(el) });
+  }
+  if (pairs.length === 0) return null;
+
+  pairs.sort((a, b) => a.depth - b.depth);
+  const anchorPts = pairs.map((p) => p.pt);
+
+  const first = anchorPts[0]!;
+  const start: VbPt = {
+    x: vbW * 0.5,
+    y: Math.max(4, first.y - Math.min(200, vbH * 0.06)),
+  };
+
+  const points: VbPt[] = [start, ...anchorPts];
+
+  return {
+    pathD: catmullRomToSvgPath(points),
+    nodePts: anchorPts,
+    vbW,
+    vbH,
+  };
+}
 
 function ShuttlecockSvg() {
   return (
@@ -197,9 +247,25 @@ function ShuttlecockSvg() {
 }
 
 export default function ShuttlecockPath() {
+  const trailMaskDomId = `shuttle-trail-mask-${useId().replace(/:/g, "")}`;
   const containerRef = useRef<HTMLDivElement>(null);
   const pathRef = useRef<SVGPathElement>(null);
   const traceSvgRef = useRef<SVGSVGElement>(null);
+  /** One ref per project card dot (index matches PROJECTS order). */
+  const dotRefs = useRef<(HTMLSpanElement | null)[]>(
+    Array.from({ length: PROJECTS.length }, () => null),
+  );
+  const dotRefCallbacks = useMemo(
+    () =>
+      PROJECTS.map(
+        (_, i) => (el: HTMLSpanElement | null) => {
+          dotRefs.current[i] = el;
+        },
+      ),
+    [],
+  );
+  /** Latest path user-space size (sync with viewBox) for shuttle screen projection. */
+  const pathSpaceRef = useRef({ w: INITIAL_VB.w, h: INITIAL_VB.h });
   const [pathLen, setPathLen] = useState<number | null>(null);
   const shuttleX = useMotionValue(0);
   const shuttleY = useMotionValue(0);
@@ -209,8 +275,11 @@ export default function ShuttlecockPath() {
   const introDismissedRef = useRef(false);
   const [hasClicked, setHasClicked] = useState(false);
   const [angle, setAngle] = useState(0);
+  const [svgVb, setSvgVb] = useState({ w: INITIAL_VB.w, h: INITIAL_VB.h });
   const [measuredNodePoints, setMeasuredNodePoints] = useState<VbPt[]>([]);
-  const [pathD, setPathD] = useState(FALLBACK_PATH_D);
+  const [pathD, setPathD] = useState(() =>
+    fallbackPathD(INITIAL_VB.w, INITIAL_VB.h),
+  );
   const [nodeVisible, setNodeVisible] = useState<boolean[]>(
     PROJECTS.map(() => false),
   );
@@ -221,6 +290,14 @@ export default function ShuttlecockPath() {
     target: containerRef,
     offset: ["start start", "end end"],
   });
+
+  /** Map page scroll 0…SHUTTLE_SCROLL_END → path 0…1; hold at 1 past last card (per brief). */
+  const clampedShuttleProgress = useTransform(
+    scrollYProgress,
+    [0, SHUTTLE_SCROLL_END],
+    [0, 1],
+    { clamp: true },
+  );
 
   const updatePoint = useCallback(
     (t: number) => {
@@ -241,15 +318,19 @@ export default function ShuttlecockPath() {
       const svg = traceSvgRef.current;
       if (!svg) return;
       const rect = svg.getBoundingClientRect();
-      shuttleX.set(rect.left + (pt.x / VIEW_W) * rect.width);
-      shuttleY.set(rect.top + (pt.y / VIEW_H) * rect.height);
+      const { w: vbW, h: vbH } = pathSpaceRef.current;
+      if (vbW < 1 || vbH < 1) return;
+      shuttleX.set(rect.left + (pt.x / vbW) * rect.width);
+      shuttleY.set(rect.top + (pt.y / vbH) * rect.height);
     },
     [pathLen],
   );
 
-  useMotionValueEvent(scrollYProgress, "change", (v) => {
+  useMotionValueEvent(clampedShuttleProgress, "change", (v) => {
     updatePoint(v);
+  });
 
+  useMotionValueEvent(scrollYProgress, "change", (v) => {
     const prev = prevProgress.current;
     for (let i = 0; i < CARD_DEPTHS.length; i++) {
       const depth = CARD_DEPTHS[i];
@@ -278,8 +359,8 @@ export default function ShuttlecockPath() {
   });
 
   useEffect(() => {
-    updatePoint(scrollYProgress.get());
-  }, [scrollYProgress, updatePoint, pathD]);
+    updatePoint(clampedShuttleProgress.get());
+  }, [clampedShuttleProgress, updatePoint, pathD]);
 
   useLayoutEffect(() => {
     const container = containerRef.current;
@@ -288,13 +369,20 @@ export default function ShuttlecockPath() {
 
     let raf = 0;
     const runMeasure = () => {
-      const result = measurePathFromCardAnchors(container, svg);
+      const result = computePathFromDotRefs(svg, dotRefs.current);
       if (result) {
+        pathSpaceRef.current = { w: result.vbW, h: result.vbH };
+        setSvgVb({ w: result.vbW, h: result.vbH });
         setPathD(result.pathD);
         setMeasuredNodePoints(result.nodePts);
         setPathLen(null);
       } else {
-        setPathD(FALLBACK_PATH_D);
+        const r = svg.getBoundingClientRect();
+        const w = Math.max(INITIAL_VB.w, r.width);
+        const h = Math.max(INITIAL_VB.h, r.height);
+        pathSpaceRef.current = { w, h };
+        setSvgVb({ w, h });
+        setPathD(fallbackPathD(w, h));
         setMeasuredNodePoints([]);
         setPathLen(null);
       }
@@ -386,16 +474,59 @@ export default function ShuttlecockPath() {
         <svg
           ref={traceSvgRef}
           className="pointer-events-none absolute inset-0 z-[1] h-full w-full"
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          preserveAspectRatio="xMidYMin meet"
+          viewBox={`0 0 ${svgVb.w} ${svgVb.h}`}
+          preserveAspectRatio="none"
           aria-hidden
         >
+          <defs>
+            <mask
+              id={trailMaskDomId}
+              maskUnits="userSpaceOnUse"
+              maskContentUnits="userSpaceOnUse"
+            >
+              <rect
+                x={0}
+                y={0}
+                width={svgVb.w}
+                height={svgVb.h}
+                fill="black"
+              />
+              {/* Solid white stroke + pathLength = reveal along curve without touching dash pattern */}
+              <motion.path
+                d={pathD}
+                fill="none"
+                stroke="white"
+                strokeWidth={SHUTTLE_TRAIL_MASK_STROKE_PX}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                vectorEffect="nonScalingStroke"
+                style={{ pathLength: clampedShuttleProgress }}
+                aria-hidden
+              />
+            </mask>
+          </defs>
+
+          {/* Geometry for shuttle position sampling (invisible) */}
           <path
             ref={pathRef}
             d={pathD}
             fill="none"
             stroke="none"
             strokeWidth={0}
+            aria-hidden
+          />
+
+          {/* Dashed trail: dash pattern here only; scroll trim via mask above */}
+          <path
+            d={pathD}
+            fill="none"
+            stroke={SHUTTLE_TRAIL_STROKE}
+            strokeWidth={SHUTTLE_TRAIL_STROKE_WIDTH_PX}
+            strokeDasharray={SHUTTLE_TRAIL_DASH}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            vectorEffect="nonScalingStroke"
+            mask={`url(#${trailMaskDomId})`}
             aria-hidden
           />
 
@@ -413,13 +544,18 @@ export default function ShuttlecockPath() {
                 transformOrigin: `${p.x}px ${p.y}px`,
               }}
             >
-              <circle cx={p.x} cy={p.y} r={0.6} fill="#000000" />
+              <circle cx={p.x} cy={p.y} r={4} fill="#000000" />
             </motion.g>
           ))}
         </svg>
 
-        {PROJECTS.map((item) => (
-          <ProjectCard key={item.id} item={item} scrollYProgress={scrollYProgress} />
+        {PROJECTS.map((item, i) => (
+          <ProjectCard
+            key={item.id}
+            item={item}
+            scrollYProgress={scrollYProgress}
+            dotRef={dotRefCallbacks[i]}
+          />
         ))}
 
         <motion.div
